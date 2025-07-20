@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Postify - AI Social Poster",
+  "version": "1.0.0",
+  "description": "AI-powered tool to generate and post social media content from Gmail certificates",
+  "permissions": [
+    "identity",
+    "storage",
+    "scripting"
+  ],
+  "oauth2": {
+    "client_id": "13014039047-ejo7fhgtvnefb58ijgoq7scdm5d6qei0.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/userinfo.email"
+    ]
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "/assets/icon16.png",
+      "48": "/assets/icon48.png",
+      "128": "/assets/icon128.png"
+    }
+  },
+  "host_permissions": [
+    "https://www.googleapis.com/*",
+    "https://api.openai.com/*",
+    "https://api.linkedin.com/*",
+    "https://api.twitter.com/*"
+  ],
+  "icons": {
+    "16": "/assets/icon16.png",
+    "48": "/assets/icon48.png",
+    "128": "/assets/icon128.png"
+  }
+}
