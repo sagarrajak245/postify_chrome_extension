@@ -134,6 +134,7 @@ function App() {
 
       const socialService = createSocialMediaService(linkedinToken, twitterToken);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await socialService.postToSocial(platform as any, generatedPost);
 
       if (result.success) {

@@ -32,8 +32,13 @@
     "https://www.googleapis.com/*",
     "https://api.openai.com/*",
     "https://api.linkedin.com/*",
-    "https://api.twitter.com/*"
+    "https://api.twitter.com/*",
+    "https://api.x.com/*",
+    "https://x.com/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://www.googleapis.com https://api.openai.com https://api.linkedin.com https://api.twitter.com https://twitter.com https://api.x.com https://x.com;"
+  },
   "icons": {
     "16": "/assets/icon16.png",
     "48": "/assets/icon48.png",

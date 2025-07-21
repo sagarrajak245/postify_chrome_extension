@@ -1,5 +1,5 @@
 
-// Enhanced debug version of background script
+
 console.log('Postify background script loaded');
 
 // Install event

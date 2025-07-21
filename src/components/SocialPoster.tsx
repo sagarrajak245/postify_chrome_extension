@@ -36,6 +36,7 @@ export const SocialPoster: React.FC<SocialPosterProps> = ({
             await onPost(platform);
             setPosted(prev => ({ ...prev, [platform]: true }));
             toast.success(`Posted to ${platform.charAt(0).toUpperCase() + platform.slice(1)} successfully!`);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             const errorMessage = error?.message || (typeof error === 'string' ? error : 'Unknown error occurred');
             toast.error(`Failed to post to ${platform}: ${errorMessage}`);

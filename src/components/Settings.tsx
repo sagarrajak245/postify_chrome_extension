@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { CheckCircle, Eye, EyeOff, Save, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -33,6 +34,7 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
         })();
     }, []);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleInputChange = (key: keyof AppSettings, value: any) => {
         setFormData(prev => ({ ...prev, [key]: value }));
     };
@@ -123,7 +125,7 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
                     toast.error('Twitter credentials invalid or user info fetch failed.');
                 }
             } else {
-                setTwitterConnected(false); 
+                setTwitterConnected(false);
                 setTwitterUsername(null);
                 toast.error(result.error || 'Failed to connect to Twitter');
             }
