@@ -6,7 +6,8 @@
   "permissions": [
     "identity",
     "storage",
-    "scripting"
+    "scripting",
+    "alarms"
   ],
   "oauth2": {
     "client_id": "13014039047-ejo7fhgtvnefb58ijgoq7scdm5d6qei0.apps.googleusercontent.com",
