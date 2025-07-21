@@ -1,12 +1,14 @@
-import { Mail, Settings, Share2, Sparkles } from 'lucide-react';
+import { Mail, Settings as SettingsIcon, Share2, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Toaster } from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 import AuthStatus from './components/AuthStatus';
 import CertificateList from './components/CertificateList';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import PostGenerator from './components/PostGenerator';
+import Settings from './components/Settings';
 import { SocialPoster } from './components/SocialPoster';
 import type { AppSettings, AuthState, Certificate, GeneratedPost } from './types';
+import { createSocialMediaService } from './utils/socialService';
 import { storage } from './utils/storage';
 
 type AppView = 'certificates' | 'generator' | 'poster' | 'settings';
@@ -119,6 +121,61 @@ function App() {
     setCurrentView('certificates');
   };
 
+  const handlePostToSocial = async (platform: string) => {
+    if (!generatedPost || !settings) {
+      toast.error('Missing post or settings');
+      return;
+    }
+
+    try {
+      // Get tokens from settings
+      const twitterToken = settings.twitterClientId; // Using twitterClientId field for Twitter token
+      const linkedinToken = "string"; // Will be implemented later
+
+      const socialService = createSocialMediaService(linkedinToken, twitterToken);
+
+      const result = await socialService.postToSocial(platform as any, generatedPost);
+
+      if (result.success) {
+        toast.success(`Posted successfully to ${platform}!`);
+        if (result.data?.url) {
+          // Open the posted content in a new tab
+          chrome.tabs.create({ url: result.data.url });
+        }
+        handlePostComplete();
+      } else {
+        toast.error(result.error || `Failed to post to ${platform}`);
+      }
+    } catch (error) {
+      console.error('Posting error:', error);
+      toast.error(`Failed to post to ${platform}`);
+    }
+  };
+
+  const handleSavePost = async () => {
+    if (!generatedPost) return;
+
+    try {
+      // Save post to storage
+      const post = {
+        id: `post_${Date.now()}`,
+        platform: generatedPost.platform,
+        content: generatedPost.content,
+        hashtags: generatedPost.hashtags,
+        status: 'draft' as const,
+        createdAt: new Date().toISOString(),
+        certificateId: selectedCertificate?.id || '',
+      };
+
+      await storage.addPost(post);
+      toast.success('Post saved as draft!');
+      handlePostComplete();
+    } catch (error) {
+      console.error('Save post error:', error);
+      toast.error('Failed to save post');
+    }
+  };
+
   // const handleSettingsUpdate = async (newSettings: Partial<AppSettings>) => {
   //   if (settings) {
   //     const updatedSettings = { ...settings, ...newSettings };
@@ -155,7 +212,7 @@ function App() {
               className="p-1 hover:bg-blue-500 rounded transition-colors"
               title="Settings"
             >
-              <Settings className="h-5 w-5" />
+              <SettingsIcon className="h-5 w-5" />
             </button>
           </div>
         </header>
@@ -236,20 +293,18 @@ function App() {
               {currentView === 'poster' && generatedPost && (
                 <SocialPoster
                   post={generatedPost}
-                  onPost={async (platform: string) => {
-                    // Handle posting logic
-                    console.log(`Posting to ${platform}:`, generatedPost);
-                  }}
-                  onSave={async () => {
-                    // Handle saving post
-                    console.log('Saving post:', generatedPost);
-                  }}
+                  onPost={handlePostToSocial}
+                  onSave={handleSavePost}
                   onClose={handlePostComplete}
                 />
               )}
 
               {currentView === 'settings' && settings && (
-                <div>Settings component placeholder</div>
+                <Settings
+                  settings={settings}
+                  onClose={() => setCurrentView('certificates')}
+                  onSettingsUpdate={setSettings}
+                />
               )}
             </>
           )}

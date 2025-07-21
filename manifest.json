@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Postify - AI Social Poster",
   "version": "1.0.0",
-  "description": "AI-powered tool to generate and post social media content from Gmail certificates",
+  "description": "Transform your Gmail certificates into engaging social media posts with AI. Automatically scan Gmail for certificates and generate professional posts for LinkedIn and Twitter.",
   "permissions": [
     "identity",
     "storage",

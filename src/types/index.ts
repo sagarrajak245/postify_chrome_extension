@@ -88,6 +88,7 @@ export interface StorageData {
 
 export interface AppSettings {
     openaiApiKey: string;
+    googleClientId?: string;
     linkedinClientId?: string;
     linkedinClientSecret?: string;
     twitterClientId?: string;

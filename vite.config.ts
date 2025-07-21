@@ -1,19 +1,12 @@
-import react from '@vitejs/plugin-react'
-import { copyFileSync } from 'fs'
-import { resolve } from 'path'
-import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
+import { defineConfig } from 'vite';
 
+// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    {
-      name: 'copy-manifest',
-      writeBundle() {
-        copyFileSync('manifest.json', 'dist/manifest.json')
-      }
-    }
-  ],
+  plugins: [react()],
   build: {
+    outDir: 'dist',
     rollupOptions: {
       input: {
         popup: resolve(__dirname, 'popup.html'),
@@ -21,16 +14,20 @@ export default defineConfig({
       },
       output: {
         entryFileNames: '[name].js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name].[ext]'
-      }
+        chunkFileNames: '[name].js',
+        assetFileNames: '[name].[ext]',
+      },
     },
-    outDir: 'dist',
-    emptyOutDir: true
+    target: 'es2015',
+    minify: 'terser',
+    sourcemap: false,
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src')
-    }
-  }
-})
+      '@': resolve(__dirname, 'src'),
+    },
+  },
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
+  },
+});

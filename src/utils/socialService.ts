@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import type { ApiResponse, GeneratedPost, SocialPlatform } from '../types';
 
 export class SocialMediaService {
