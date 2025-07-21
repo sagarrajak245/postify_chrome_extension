@@ -2,7 +2,7 @@ import { ArrowLeft, Check, Copy, Linkedin, RefreshCw, Sparkles, Twitter } from '
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import type { AppSettings, Certificate, GeneratedPost, SocialPlatform } from '../types';
-import { createGPTService } from '../utils/gptService';
+import { generatePostWithAnyProvider } from '../utils/gptService';
 import { storage } from '../utils/storage';
 
 interface PostGeneratorProps {
@@ -41,14 +41,13 @@ const PostGenerator: React.FC<PostGeneratorProps> = ({
     };
 
     const handleGenerate = async () => {
-        if (!settings?.openaiApiKey) {
-            toast.error('Please configure your OpenAI API key in settings');
+        if (!settings?.openaiApiKey && !settings?.geminiApiKey && !settings?.grokApiKey) {
+            toast.error('Please configure at least one AI provider API key in settings');
             return;
         }
 
         setIsGenerating(true);
         try {
-            const gptService = createGPTService(settings.openaiApiKey);
             const certificateContent = `
 Certificate: ${certificate.title}
 Issuer: ${certificate.issuer}
@@ -57,12 +56,16 @@ Description: ${certificate.description}
 Skills: ${certificate.skills.join(', ')}
       `.trim();
 
-            const result = await gptService.generatePost({
+            const result = await generatePostWithAnyProvider({
                 certificateContent,
                 platform,
                 tone,
                 includeHashtags,
                 customMessage: customMessage || undefined
+            }, {
+                openaiApiKey: settings.openaiApiKey,
+                geminiApiKey: settings.geminiApiKey,
+                grokApiKey: settings.grokApiKey
             });
 
             if (result.success && result.data) {
@@ -108,6 +111,14 @@ Skills: ${certificate.skills.join(', ')}
     };
 
     const PlatformIcon = platformIcons[platform];
+
+    const hasAnyAIKey = (settings: AppSettings | null) => {
+        return !!(
+            settings?.openaiApiKey ||
+            (settings?.geminiApiKey && settings.geminiApiKey.length > 10) ||
+            (settings?.grokApiKey && settings.grokApiKey.length > 10)
+        );
+    };
 
     return (
         <div className="flex flex-col h-full">
@@ -215,9 +226,10 @@ Skills: ${certificate.skills.join(', ')}
                     <span>{isGenerating ? 'Generating...' : 'Generate Post'}</span>
                 </button>
 
-                {!settings?.openaiApiKey && (
-                    <p className="text-xs text-red-600 text-center">
-                        Please configure your OpenAI API key in settings to generate posts.
+                {/* Error message for missing AI key */}
+                {!hasAnyAIKey(settings) && (
+                    <p className="text-xs text-red-600 text-center mt-2">
+                        Please configure at least one AI provider API key (OpenAI, Gemini, or Grok) in settings to generate posts.
                     </p>
                 )}
 

@@ -12,6 +12,12 @@ export interface AuthState {
     googleToken: string | null;
     linkedinToken: string | null;
     twitterToken: string | null;
+    twitterUser?: {
+        id: string;
+        name: string;
+        username: string;
+        [key: string]: any;
+    };
 }
 
 // Gmail and Email Types
@@ -88,6 +94,8 @@ export interface StorageData {
 
 export interface AppSettings {
     openaiApiKey: string;
+    geminiApiKey?: string;
+    grokApiKey?: string;
     googleClientId?: string;
     linkedinClientId?: string;
     linkedinClientSecret?: string;

@@ -1,5 +1,99 @@
 import type { ApiResponse, Certificate, GeneratedPost, PostGenerationRequest } from '../types';
 
+// Gemini API implementation
+async function generateWithGemini(request: PostGenerationRequest, apiKey: string) {
+    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+    const prompt = request.certificateContent;
+    const body = {
+        contents: [
+            { parts: [{ text: prompt }] }
+        ]
+    };
+    const response = await fetch(`${endpoint}?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+            success: false,
+            error: `Gemini API error: ${response.status} - ${errorData.error?.message || response.statusText}`
+        };
+    }
+    const data = await response.json();
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return {
+        success: true,
+        data: {
+            content,
+            hashtags: [],
+            platform: request.platform,
+            characterCount: content.length
+        }
+    };
+}
+
+// Grok API implementation
+async function generateWithGrok(request: PostGenerationRequest, apiKey: string) {
+    const endpoint = 'https://api.grok.x.ai/v1/chat/completions';
+    const prompt = request.certificateContent;
+    const body = {
+        model: 'grok-1',
+        messages: [
+            { role: 'user', content: prompt }
+        ],
+        max_tokens: request.platform === 'twitter' ? 200 : 400,
+        temperature: 0.7
+    };
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+            success: false,
+            error: `Grok API error: ${response.status} - ${errorData.error?.message || response.statusText}`
+        };
+    }
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+    return {
+        success: true,
+        data: {
+            content,
+            hashtags: [],
+            platform: request.platform,
+            characterCount: content.length
+        }
+    };
+}
+
+// Wrapper for multi-provider support
+export async function generatePostWithAnyProvider(request: PostGenerationRequest, settings: {
+    openaiApiKey?: string;
+    geminiApiKey?: string;
+    grokApiKey?: string;
+}): Promise<ApiResponse<GeneratedPost>> {
+    if (settings.openaiApiKey) {
+        const { createGPTService } = await import('./gptService');
+        const gptService = createGPTService(settings.openaiApiKey);
+        return gptService.generatePost(request);
+    }
+    if (settings.geminiApiKey) {
+        return generateWithGemini(request, settings.geminiApiKey);
+    }
+    if (settings.grokApiKey) {
+        return generateWithGrok(request, settings.grokApiKey);
+    }
+    return { success: false, error: 'No AI provider API key configured.' };
+}
+
 export class GPTService {
     private apiKey: string;
     private baseUrl = 'https://api.openai.com/v1/chat/completions';

@@ -36,9 +36,10 @@ export const SocialPoster: React.FC<SocialPosterProps> = ({
             await onPost(platform);
             setPosted(prev => ({ ...prev, [platform]: true }));
             toast.success(`Posted to ${platform.charAt(0).toUpperCase() + platform.slice(1)} successfully!`);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        } catch (error: any) {
+            const errorMessage = error?.message || (typeof error === 'string' ? error : 'Unknown error occurred');
             toast.error(`Failed to post to ${platform}: ${errorMessage}`);
+            console.error(`Failed to post to ${platform}:`, error);
         } finally {
             setPosting(prev => ({ ...prev, [platform]: false }));
         }

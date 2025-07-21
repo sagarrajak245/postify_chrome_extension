@@ -1,13 +1,36 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import type { ApiResponse, GeneratedPost, SocialPlatform } from '../types';
+import { LinkedInOAuthService } from './linkedinOAuth';
+import { TwitterAuthManager } from './twitterService';
 
 export class SocialMediaService {
     private linkedinToken: string | null = null;
-    private twitterToken: string | null = null;
+    private twitterClientId: string | null = null;
+    private twitterClientSecret: string | null = null;
+    private twitterAccessToken: string | null = null;
+    private twitterRefreshToken: string | null = null;
+    private twitterAuthManager: TwitterAuthManager | null = null;
+    private linkedinOAuthService: LinkedInOAuthService | null = null;
+    private linkedinAccessToken: string | null = null;
 
-    constructor(linkedinToken?: string, twitterToken?: string) {
+    constructor(linkedinToken?: string, twitterClientId?: string, twitterClientSecret?: string, twitterAccessToken?: string, twitterRefreshToken?: string, linkedinClientId?: string, linkedinClientSecret?: string) {
         this.linkedinToken = linkedinToken || null;
-        this.twitterToken = twitterToken || null;
+        this.twitterClientId = twitterClientId || null;
+        this.twitterClientSecret = twitterClientSecret || null;
+        this.twitterAccessToken = twitterAccessToken || null;
+        this.twitterRefreshToken = twitterRefreshToken || null;
+        if (twitterClientId && twitterClientSecret) {
+            this.twitterAuthManager = new TwitterAuthManager({
+                clientId: twitterClientId,
+                clientSecret: twitterClientSecret,
+                accessToken: twitterAccessToken,
+                refreshToken: twitterRefreshToken,
+            });
+        }
+        if (linkedinClientId && linkedinClientSecret) {
+            this.linkedinOAuthService = new LinkedInOAuthService(linkedinClientId, linkedinClientSecret);
+        }
+        this.linkedinAccessToken = linkedinToken || null;
     }
 
     /**
@@ -35,36 +58,36 @@ export class SocialMediaService {
      */
     private async postToLinkedIn(post: GeneratedPost): Promise<ApiResponse<{ postId: string; url?: string }>> {
         try {
-            if (!this.linkedinToken) {
+            if (!this.linkedinOAuthService) {
                 return {
                     success: false,
-                    error: 'LinkedIn not connected. Please authenticate with LinkedIn first.'
+                    error: 'LinkedIn not connected. Please provide LinkedIn Client ID and Secret and authenticate.'
                 };
             }
-
-            // Get user profile first to get the person URN
-            const profileResponse = await fetch('https://api.linkedin.com/v2/people/~', {
-                headers: {
-                    'Authorization': `Bearer ${this.linkedinToken}`,
-                    'Content-Type': 'application/json'
+            // Authenticate if needed
+            if (!this.linkedinAccessToken) {
+                const authResult = await this.linkedinOAuthService.authenticate();
+                if (!authResult.success || !authResult.data?.token) {
+                    return { success: false, error: authResult.error || 'LinkedIn authentication failed' };
                 }
-            });
-
-            if (!profileResponse.ok) {
-                return {
-                    success: false,
-                    error: `LinkedIn authentication failed: ${profileResponse.status}`
-                };
+                this.linkedinAccessToken = authResult.data.token;
             }
-
-            const profile = await profileResponse.json();
-            const personUrn = profile.id;
-
-            // Prepare the post content
+            // Prepare post content
             const fullContent = post.hashtags.length > 0
                 ? `${post.content}\n\n${post.hashtags.join(' ')}`
                 : post.content;
-
+            // Get user profile to get person URN
+            const profileResponse = await fetch('https://api.linkedin.com/v2/me', {
+                headers: {
+                    'Authorization': `Bearer ${this.linkedinAccessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (!profileResponse.ok) {
+                return { success: false, error: 'Failed to get LinkedIn profile' };
+            }
+            const profile = await profileResponse.json();
+            const personUrn = profile.id;
             // Create the post
             const postData = {
                 author: `urn:li:person:${personUrn}`,
@@ -81,17 +104,15 @@ export class SocialMediaService {
                     'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
                 }
             };
-
             const response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${this.linkedinToken}`,
+                    'Authorization': `Bearer ${this.linkedinAccessToken}`,
                     'Content-Type': 'application/json',
                     'X-Restli-Protocol-Version': '2.0.0'
                 },
                 body: JSON.stringify(postData)
             });
-
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 return {
@@ -99,10 +120,8 @@ export class SocialMediaService {
                     error: `LinkedIn posting failed: ${response.status} - ${errorData.message || response.statusText}`
                 };
             }
-
             const result = await response.json();
             const postId = result.id;
-
             return {
                 success: true,
                 data: {
@@ -110,98 +129,48 @@ export class SocialMediaService {
                     url: `https://www.linkedin.com/feed/update/${postId}/`
                 }
             };
-        } catch (error) {
+        } catch (error: any) {
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'LinkedIn posting failed'
+                error: error?.message || 'LinkedIn posting failed'
             };
         }
     }
 
     /**
-     * Post to Twitter/X
+     * Post to Twitter/X using OAuth 2.0 flow
      */
-    private async postToTwitter(post: GeneratedPost): Promise<ApiResponse<{ postId: string; url?: string }>> {
+    async postToTwitter(post: GeneratedPost): Promise<ApiResponse<{ postId: string; url?: string }>> {
         try {
-            if (!this.twitterToken) {
+            if (!this.twitterAuthManager) {
                 return {
                     success: false,
-                    error: 'Twitter not connected. Please authenticate with Twitter first.'
+                    error: 'Twitter not connected. Please provide Twitter Client ID and Secret and authenticate.'
                 };
             }
-
-            // Prepare the post content
-            const fullContent = post.hashtags.length > 0
+            if (!this.twitterAuthManager.isAuthenticated()) {
+                // Start OAuth flow 
+                const tokens = await this.twitterAuthManager.authenticate();
+                this.twitterAccessToken = tokens.accessToken;
+                this.twitterRefreshToken = tokens.refreshToken || null;
+            }
+            // Post the tweet
+            const tweetText = post.hashtags.length > 0
                 ? `${post.content} ${post.hashtags.join(' ')}`
                 : post.content;
-
-            // Ensure character limit
-            if (fullContent.length > 280) {
-                return {
-                    success: false,
-                    error: 'Post exceeds Twitter character limit (280 characters)'
-                };
-            }
-
-            const postData = {
-                text: fullContent
-            };
-
-            const response = await fetch('https://api.twitter.com/2/tweets', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.twitterToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(postData)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                return {
-                    success: false,
-                    error: `Twitter posting failed: ${response.status} - ${errorData.title || response.statusText}`
-                };
-            }
-
-            const result = await response.json();
-            const postId = result.data.id;
-            const username = await this.getTwitterUsername();
-
+            const tweet = await this.twitterAuthManager.postTweet(tweetText);
             return {
                 success: true,
                 data: {
-                    postId,
-                    url: username ? `https://twitter.com/${username}/status/${postId}` : undefined
+                    postId: tweet.id,
+                    url: `https://twitter.com/i/web/status/${tweet.id}`
                 }
             };
-        } catch (error) {
+        } catch (error: any) {
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'Twitter posting failed'
+                error: error?.message || 'Twitter posting failed'
             };
-        }
-    }
-
-    /**
-     * Get Twitter username for URL generation
-     */
-    private async getTwitterUsername(): Promise<string | null> {
-        try {
-            if (!this.twitterToken) return null;
-
-            const response = await fetch('https://api.twitter.com/2/users/me', {
-                headers: {
-                    'Authorization': `Bearer ${this.twitterToken}`
-                }
-            });
-
-            if (!response.ok) return null;
-
-            const data = await response.json();
-            return data.data?.username || null;
-        } catch {
-            return null;
         }
     }
 
@@ -210,11 +179,23 @@ export class SocialMediaService {
      */
     async authenticateLinkedIn(): Promise<ApiResponse<{ token: string }>> {
         try {
-            // This would typically use OAuth flow
-            // For Chrome extension, we'd need to implement OAuth with redirect handling
+            if (!this.linkedinOAuthService) {
+                return {
+                    success: false,
+                    error: 'LinkedIn not connected. Please provide LinkedIn Client ID and Secret and authenticate.'
+                };
+            }
+            // Authenticate if needed
+            if (!this.linkedinAccessToken) {
+                const authResult = await this.linkedinOAuthService.authenticate();
+                if (!authResult.success || !authResult.data?.token) {
+                    return { success: false, error: authResult.error || 'LinkedIn authentication failed' };
+                }
+                this.linkedinAccessToken = authResult.data.token;
+            }
             return {
-                success: false,
-                error: 'LinkedIn authentication not yet implemented. This requires OAuth setup.'
+                success: true,
+                data: { token: this.linkedinAccessToken || '' }
             };
         } catch (error) {
             return {
@@ -229,11 +210,21 @@ export class SocialMediaService {
      */
     async authenticateTwitter(): Promise<ApiResponse<{ token: string }>> {
         try {
-            // This would typically use OAuth flow
-            // For Chrome extension, we'd need to implement OAuth with redirect handling
+            if (!this.twitterAuthManager) {
+                return {
+                    success: false,
+                    error: 'Twitter not connected. Please provide Twitter Client ID and Secret and authenticate.'
+                };
+            }
+            if (!this.twitterAuthManager.isAuthenticated()) {
+                // Start OAuth flow
+                const tokens = await this.twitterAuthManager.authenticate();
+                this.twitterAccessToken = tokens.accessToken;
+                this.twitterRefreshToken = tokens.refreshToken || null;
+            }
             return {
-                success: false,
-                error: 'Twitter authentication not yet implemented. This requires OAuth setup.'
+                success: true,
+                data: { token: this.twitterAccessToken || '' }
             };
         } catch (error) {
             return {
@@ -249,9 +240,9 @@ export class SocialMediaService {
     isConnected(platform: SocialPlatform): boolean {
         switch (platform) {
             case 'linkedin':
-                return !!this.linkedinToken;
+                return !!this.linkedinAccessToken; // Check for access token
             case 'twitter':
-                return !!this.twitterToken;
+                return !!this.twitterAccessToken; // Check for access token
             default:
                 return false;
         }
@@ -260,9 +251,21 @@ export class SocialMediaService {
     /**
      * Set authentication tokens
      */
-    setTokens(linkedinToken?: string, twitterToken?: string): void {
+    setTokens(linkedinToken?: string, twitterClientId?: string, twitterClientSecret?: string, twitterAccessToken?: string, twitterRefreshToken?: string): void {
         if (linkedinToken) this.linkedinToken = linkedinToken;
-        if (twitterToken) this.twitterToken = twitterToken;
+        if (twitterClientId) this.twitterClientId = twitterClientId;
+        if (twitterClientSecret) this.twitterClientSecret = twitterClientSecret;
+        if (twitterAccessToken) this.twitterAccessToken = twitterAccessToken;
+        if (twitterRefreshToken) this.twitterRefreshToken = twitterRefreshToken;
+        if (twitterClientId && twitterClientSecret) {
+            this.twitterAuthManager = new TwitterAuthManager({
+                clientId: twitterClientId,
+                clientSecret: twitterClientSecret,
+                accessToken: twitterAccessToken,
+                refreshToken: twitterRefreshToken,
+            });
+        }
+        if (linkedinToken) this.linkedinAccessToken = linkedinToken; // Update linkedinAccessToken
     }
 
     /**
@@ -270,10 +273,13 @@ export class SocialMediaService {
      */
     clearTokens(platform?: SocialPlatform): void {
         if (!platform || platform === 'linkedin') {
-            this.linkedinToken = null;
+            this.linkedinAccessToken = null;
+            this.linkedinOAuthService = null; // Clear the service
         }
         if (!platform || platform === 'twitter') {
-            this.twitterToken = null;
+            this.twitterAccessToken = null;
+            this.twitterRefreshToken = null;
+            this.twitterAuthManager = null; // Clear the manager
         }
     }
 
@@ -353,8 +359,8 @@ export class SocialMediaService {
 /**
  * Helper function to create social media service instance
  */
-export function createSocialMediaService(linkedinToken?: string, twitterToken?: string): SocialMediaService {
-    return new SocialMediaService(linkedinToken, twitterToken);
+export function createSocialMediaService(linkedinToken?: string, twitterClientId?: string, twitterClientSecret?: string, twitterAccessToken?: string, twitterRefreshToken?: string): SocialMediaService {
+    return new SocialMediaService(linkedinToken, twitterClientId, twitterClientSecret, twitterAccessToken, twitterRefreshToken);
 }
 
 /**

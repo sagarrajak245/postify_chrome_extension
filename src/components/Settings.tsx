@@ -1,7 +1,8 @@
 import { CheckCircle, Eye, EyeOff, Save, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import type { AppSettings } from '../types';
+import { SocialMediaService } from '../utils/socialService';
 import { storage } from '../utils/storage';
 
 interface SettingsProps {
@@ -16,6 +17,21 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
     const [showTwitterToken, setShowTwitterToken] = useState(false);
     const [showLinkedInSecret, setShowLinkedInSecret] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [twitterConnected, setTwitterConnected] = useState(false);
+    const [twitterUsername, setTwitterUsername] = useState<string | null>(null);
+    const [linkedinConnected, setLinkedinConnected] = useState(false);
+
+    useEffect(() => {
+        // On mount, check connection status and username from storage
+        (async () => {
+            const authState = await storage.getAuthState();
+            setTwitterConnected(!!authState.twitterToken);
+            setLinkedinConnected(!!authState.linkedinToken);
+            if (authState.twitterUser && authState.twitterUser.username) {
+                setTwitterUsername(authState.twitterUser.username);
+            }
+        })();
+    }, []);
 
     const handleInputChange = (key: keyof AppSettings, value: any) => {
         setFormData(prev => ({ ...prev, [key]: value }));
@@ -48,12 +64,124 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
         return clientId.length > 10 && clientSecret.length > 10;
     };
 
+    const isAnyAIKeyValid = () => {
+        return (
+            (formData.openaiApiKey && validateOpenAIKey(formData.openaiApiKey)) ||
+            (formData.geminiApiKey && formData.geminiApiKey.trim().length > 5) ||
+            (formData.grokApiKey && formData.grokApiKey.trim().length > 5)
+        );
+    };
+
+    const isAnyPlatformValid = () => {
+        const twitterValid = formData.twitterClientId && formData.twitterClientSecret && validateTwitterToken(formData.twitterClientId);
+        const linkedinValid = formData.linkedinClientId && formData.linkedinClientSecret && validateLinkedInCredentials(formData.linkedinClientId, formData.linkedinClientSecret);
+        return twitterValid || linkedinValid;
+    };
+
     const isFormValid = () => {
         return (
-            validateOpenAIKey(formData.openaiApiKey) &&
-            (formData.twitterClientId ? validateTwitterToken(formData.twitterClientId) : true) &&
-            (formData.linkedinClientId ? validateLinkedInCredentials(formData.linkedinClientId, formData.linkedinClientSecret || '') : true)
+            isAnyAIKeyValid() &&
+            (formData.googleClientId && formData.googleClientId.trim().length > 0) &&
+            isAnyPlatformValid()
         );
+    };
+
+    const handleConnectTwitter = async () => {
+        try {
+            const service = new SocialMediaService(
+                formData.linkedinClientId,
+                formData.twitterClientId,
+                formData.twitterClientSecret
+            );
+            const result = await service.authenticateTwitter();
+            if (result.success && result.data?.token) {
+                // Fetch user info to verify token and get username
+                try {
+                    const userInfoResp = await fetch('https://api.twitter.com/2/users/me', {
+                        headers: {
+                            'Authorization': `Bearer ${result.data.token}`,
+                            'Content-Type': 'application/json',
+                        },
+                    });
+                    if (!userInfoResp.ok) {
+                        throw new Error('Failed to fetch Twitter user info');
+                    }
+                    const userInfo = await userInfoResp.json();
+                    setTwitterConnected(true);
+                    setTwitterUsername(userInfo.data?.username || null);
+                    // Save tokens and username in authState
+                    const authState = await storage.getAuthState();
+                    await storage.setAuthState({
+                        ...authState,
+                        twitterToken: result.data.token,
+                        twitterUser: userInfo.data
+                    });
+                    toast.success(`Connected to Twitter as @${userInfo.data?.username}`);
+                } catch (err) {
+                    setTwitterConnected(false);
+                    setTwitterUsername(null);
+                    toast.error('Twitter credentials invalid or user info fetch failed.');
+                }
+            } else {
+                setTwitterConnected(false); 
+                setTwitterUsername(null);
+                toast.error(result.error || 'Failed to connect to Twitter');
+            }
+        } catch (error) {
+            setTwitterConnected(false);
+            setTwitterUsername(null);
+            toast.error('Twitter connection failed');
+        }
+    };
+
+    const handleDisconnectTwitter = async () => {
+        setTwitterConnected(false);
+        setTwitterUsername(null);
+        // Optionally clear tokens from storage
+        toast('Disconnected from Twitter');
+    };
+
+    const handleConnectLinkedIn = async () => {
+        try {
+            const service = new SocialMediaService(
+                formData.linkedinClientId,
+                formData.twitterClientId,
+                formData.twitterClientSecret,
+                undefined,
+                undefined,
+                formData.linkedinClientId,
+                formData.linkedinClientSecret
+            );
+            const result = await service.authenticateLinkedIn();
+            if (result.success && result.data?.token) {
+                // Try fetching profile to verify token is real
+                const profileResponse = await fetch('https://api.linkedin.com/v2/me', {
+                    headers: {
+                        'Authorization': `Bearer ${result.data.token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (profileResponse.ok) {
+                    setLinkedinConnected(true);
+                    toast.success('Connected to LinkedIn!');
+                } else {
+                    setLinkedinConnected(false);
+                    toast.error('LinkedIn credentials invalid.');
+                }
+            } else {
+                setLinkedinConnected(false);
+                toast.error(result.error || 'Failed to connect to LinkedIn');
+            }
+        } catch (error) {
+            setLinkedinConnected(false);
+            toast.error('LinkedIn connection failed');
+        }
+    };
+
+    const handleDisconnectLinkedIn = async () => {
+        setLinkedinConnected(false);
+        // Optionally clear tokens from storage
+        toast('Disconnected from LinkedIn');
     };
 
     return (
@@ -72,7 +200,7 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
                 {/* OpenAI API Key */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        OpenAI API Key *
+                        OpenAI API Key
                     </label>
                     <div className="relative">
                         <input
@@ -90,11 +218,8 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
                             {showOpenAIKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                     </div>
-                    {formData.openaiApiKey && !validateOpenAIKey(formData.openaiApiKey) && (
-                        <p className="text-sm text-red-600 mt-1">Invalid OpenAI API key format</p>
-                    )}
                     <p className="text-xs text-gray-500 mt-1">
-                        Required for AI post generation. Get your key from{' '}
+                        Get your key from{' '}
                         <a
                             href="https://platform.openai.com/api-keys"
                             target="_blank"
@@ -102,6 +227,56 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
                             className="text-blue-600 hover:underline"
                         >
                             OpenAI Platform
+                        </a>
+                    </p>
+                </div>
+
+                {/* Gemini API Key */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Gemini API Key
+                    </label>
+                    <input
+                        type="text"
+                        value={formData.geminiApiKey || ''}
+                        onChange={(e) => handleInputChange('geminiApiKey', e.target.value)}
+                        placeholder="Enter your Gemini API key"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                        Get your Gemini API key from{' '}
+                        <a
+                            href="https://aistudio.google.com/app/apikey"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
+                            Google AI Studio
+                        </a>
+                    </p>
+                </div>
+
+                {/* Grok API Key */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Grok API Key
+                    </label>
+                    <input
+                        type="text"
+                        value={formData.grokApiKey || ''}
+                        onChange={(e) => handleInputChange('grokApiKey', e.target.value)}
+                        placeholder="Enter your Grok API key"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                        Get your Grok API key from{' '}
+                        <a
+                            href="https://grok.x.ai/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
+                            Grok (xAI)
                         </a>
                     </p>
                 </div>
@@ -138,18 +313,33 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
 
                 {/* Twitter Configuration */}
                 <div className="border-t pt-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Twitter Configuration</h3>
+                    <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center justify-between">
+                        Twitter Configuration
+                        <span className={`ml-2 text-xs font-semibold ${twitterConnected ? 'text-green-600' : 'text-red-500'}`}>{twitterConnected ? `Connected${twitterUsername ? ` (@${twitterUsername})` : ''}` : 'Not Connected'}</span>
+                    </h3>
                     <div className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Twitter Bearer Token
+                                Twitter Client ID
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.twitterClientId || ''}
+                                onChange={(e) => handleInputChange('twitterClientId', e.target.value)}
+                                placeholder="Enter your Twitter Client ID"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Twitter Client Secret
                             </label>
                             <div className="relative">
                                 <input
                                     type={showTwitterToken ? 'text' : 'password'}
-                                    value={formData.twitterClientId || ''}
-                                    onChange={(e) => handleInputChange('twitterClientId', e.target.value)}
-                                    placeholder="Enter your Twitter Bearer token"
+                                    value={formData.twitterClientSecret || ''}
+                                    onChange={(e) => handleInputChange('twitterClientSecret', e.target.value)}
+                                    placeholder="Enter your Twitter Client Secret"
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 />
                                 <button
@@ -160,27 +350,46 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
                                     {showTwitterToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
                             </div>
-                            {formData.twitterClientId && !validateTwitterToken(formData.twitterClientId) && (
-                                <p className="text-sm text-red-600 mt-1">Invalid Twitter token format</p>
-                            )}
-                            <p className="text-xs text-gray-500 mt-1">
-                                Get your Bearer token from{' '}
-                                <a
-                                    href="https://developer.twitter.com/en/portal/dashboard"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline"
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Get your Twitter credentials from{' '}
+                            <a
+                                href="https://developer.twitter.com/en/portal/dashboard"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                            >
+                                Twitter Developer Portal
+                            </a>
+                        </p>
+                        <div className="flex space-x-2">
+                            <button
+                                type="button"
+                                onClick={handleConnectTwitter}
+                                disabled={twitterConnected || !formData.twitterClientId || !formData.twitterClientSecret}
+                                className="px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
+                            >
+                                {twitterConnected ? 'Connected' : 'Connect to Twitter'}
+                            </button>
+                            {twitterConnected && (
+                                <button
+                                    type="button"
+                                    onClick={handleDisconnectTwitter}
+                                    className="px-3 py-1 bg-gray-300 text-gray-700 rounded"
                                 >
-                                    Twitter Developer Portal
-                                </a>
-                            </p>
+                                    Disconnect
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 {/* LinkedIn Configuration */}
                 <div className="border-t pt-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">LinkedIn Configuration</h3>
+                    <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center justify-between">
+                        LinkedIn Configuration
+                        <span className={`ml-2 text-xs font-semibold ${linkedinConnected ? 'text-green-600' : 'text-red-500'}`}>{linkedinConnected ? 'Connected' : 'Not Connected'}</span>
+                    </h3>
                     <div className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -226,6 +435,25 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
                                 LinkedIn Developers
                             </a>
                         </p>
+                        <div className="flex space-x-2">
+                            <button
+                                type="button"
+                                onClick={handleConnectLinkedIn}
+                                disabled={linkedinConnected || !formData.linkedinClientId || !formData.linkedinClientSecret}
+                                className="px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
+                            >
+                                {linkedinConnected ? 'Connected' : 'Connect to LinkedIn'}
+                            </button>
+                            {linkedinConnected && (
+                                <button
+                                    type="button"
+                                    onClick={handleDisconnectLinkedIn}
+                                    className="px-3 py-1 bg-gray-300 text-gray-700 rounded"
+                                >
+                                    Disconnect
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
