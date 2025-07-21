@@ -1,5 +1,15 @@
 # Postify - AI Social Poster Chrome Extension
 
+> **IMPORTANT SECURITY NOTE:**
+> 
+> **Do NOT hardcode your Google OAuth Client ID in `manifest.json` for public repositories.**
+> 
+> - Store your Client ID in a `.env` file (not committed to git) or use the extension's Settings UI.
+> - If you fork or clone this repo, you must create your own Google OAuth credentials and set your own Client ID in `.env` or in the extension settings.
+> - See the setup instructions below for details.
+
+---
+
 Transform your Gmail certificates into engaging social media posts with AI. Automatically scan Gmail for certificates and generate professional posts for LinkedIn and Twitter.
 
 ## 🚀 Features
@@ -36,6 +46,11 @@ Before using this extension, you'll need to set up your own API keys and credent
    - Choose "Chrome Extension" as application type
    - Add your extension ID (get this after loading the extension)
 5. Copy the Client ID
+6. **Store your Client ID in a `.env` file as:**
+   ```env
+   VITE_GOOGLE_CLIENT_ID=your-client-id-here
+   ```
+   (Do NOT commit your `.env` file to git)
 
 #### 2. OpenAI API Key (Required)
 1. Go to [OpenAI Platform](https://platform.openai.com/api-keys)
@@ -63,6 +78,10 @@ Before using this extension, you'll need to set up your own API keys and credent
 git clone <repository-url>
 cd postify-extension
 
+# Create your .env file
+cp .env.example .env
+# Edit .env and set your VITE_GOOGLE_CLIENT_ID
+
 # Install dependencies
 npm install
 
@@ -87,7 +106,7 @@ npm run build
 1. Click the Postify extension icon in Chrome
 2. Click the Settings (gear) icon
 3. Enter all your API keys and credentials:
-   - **Google Client ID**: Your OAuth 2.0 Client ID
+   - **Google Client ID**: Your OAuth 2.0 Client ID (if not set via .env)
    - **OpenAI API Key**: Your OpenAI secret key
    - **Twitter Bearer Token**: Your Twitter Bearer token
    - **LinkedIn Client ID & Secret**: (Optional)

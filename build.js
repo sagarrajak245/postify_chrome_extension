@@ -1,10 +1,24 @@
-import { copyFileSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { build } from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+function getGoogleClientIdFromEnv() {
+    try {
+        const envPath = resolve(__dirname, '.env');
+        const envContent = readFileSync(envPath, 'utf-8');
+        const match = envContent.match(/^VITE_GOOGLE_CLIENT_ID=(.*)$/m);
+        if (match) {
+            return match[1].trim();
+        }
+        throw new Error('VITE_GOOGLE_CLIENT_ID not found in .env');
+    } catch (e) {
+        throw new Error('Failed to read .env file: ' + e.message);
+    }
+}
 
 async function buildExtension() {
     console.log('Building Chrome extension...');
@@ -17,8 +31,11 @@ async function buildExtension() {
         const distDir = resolve(__dirname, 'dist');
         const publicDir = resolve(__dirname, 'public');
 
-        // Copy manifest.json
-        copyFileSync('manifest.json', join(distDir, 'manifest.json'));
+        // Inject Google Client ID into manifest.json
+        const manifestRaw = readFileSync('manifest.json', 'utf-8');
+        const clientId = getGoogleClientIdFromEnv();
+        const manifestPatched = manifestRaw.replace('__GOOGLE_CLIENT_ID__', clientId);
+        writeFileSync(join(distDir, 'manifest.json'), manifestPatched, 'utf-8');
 
         // Copy public assets
         if (statSync(publicDir).isDirectory()) {
