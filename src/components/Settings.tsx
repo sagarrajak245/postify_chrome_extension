@@ -99,7 +99,7 @@ const Settings: React.FC<SettingsProps> = ({ settings, onClose, onSettingsUpdate
             if (result.success && result.data?.token) {
                 // Fetch user info to verify token and get username
                 try {
-                    const userInfoResp = await fetch('https://api.twitter.com/2/users/me', {
+                    const userInfoResp = await fetch('https://api.x.com/2/users/me', {
                         headers: {
                             'Authorization': `Bearer ${result.data.token}`,
                             'Content-Type': 'application/json',

@@ -79,7 +79,6 @@ export class TwitterService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': `Basic ${btoa(`${this.credentials.clientId}:${this.credentials.clientSecret}`)}`,
             },
             body: body,
         });
@@ -183,7 +182,6 @@ export class TwitterService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': `Basic ${btoa(`${this.credentials.clientId}:${this.credentials.clientSecret}`)}`,
             },
             body: new URLSearchParams({
                 refresh_token: this.credentials.refreshToken,
@@ -214,19 +212,39 @@ export class TwitterService {
             throw new Error('Not authenticated');
         }
 
-        const response = await fetch(`${this.baseUrl}/users/me`, {
+        const url = `${this.baseUrl}/users/me`;
+        const authHeader = `Bearer ${this.credentials.accessToken}`;
+
+        console.log('🔗 Making request to:', url);
+        console.log('🔑 Authorization header (first 30 chars):', authHeader.substring(0, 30) + '...');
+        console.log('🔑 Token length:', this.credentials.accessToken.length);
+        console.log('🔑 Token starts with:', this.credentials.accessToken.substring(0, 10));
+
+        const response = await fetch(url, {
             headers: {
-                'Authorization': `Bearer ${this.credentials.accessToken}`,
+                'Authorization': authHeader,
+                'Content-Type': 'application/json', // Add this header
             },
         });
 
+        console.log('📥 User info response status:', response.status);
+        console.log('📥 User info response headers:', Object.fromEntries(response.headers.entries()));
+
+        const responseText = await response.text();
+        console.log('📥 Raw user info response:', responseText);
+
         if (!response.ok) {
-            const error = await response.json();
+            let error;
+            try {
+                error = JSON.parse(responseText);
+            } catch {
+                error = { error: 'parse_error', detail: responseText };
+            }
             console.error('❌ User info error:', error);
-            throw new Error(`Twitter API error: ${error.detail || error.title || 'Unknown error'}`);
+            throw new Error(`Twitter API error: ${error.detail || error.title || error.error || 'Unknown error'}`);
         }
 
-        const data = await response.json();
+        const data = JSON.parse(responseText);
         console.log('✅ User info retrieved:', data.data);
         return data.data;
     }
