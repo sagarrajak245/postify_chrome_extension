@@ -125,44 +125,6 @@
 
   <!-- Main application script -->
   <script type="module" src="/src/main.tsx"></script>
-
-  <!-- Error handling for script loading -->
-  <script>
-    window.addEventListener('error', function (e) {
-      console.error('Script loading error:', e);
-      const root = document.getElementById('root');
-      if (root) {
-        root.innerHTML = `
-            <div class="error-boundary">
-              <h2>Failed to load Postify</h2>
-              <p>Please try refreshing the extension or contact support.</p>
-              <button onclick="window.location.reload()" style="
-                margin-top: 16px;
-                padding: 8px 16px;
-                background: #3b82f6;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                cursor: pointer;
-              ">
-                Retry
-              </button>
-            </div>
-          `;
-      }
-    });
-
-    // Chrome extension specific initialization
-    if (typeof chrome !== 'undefined' && chrome.runtime) {
-      // Extension context is available
-      console.log('Postify extension loaded');
-
-      // Handle extension updates
-      chrome.runtime.onUpdateAvailable.addListener(function (details) {
-        console.log('Extension update available:', details);
-      });
-    }
-  </script>
 </body>
 
 </html>
