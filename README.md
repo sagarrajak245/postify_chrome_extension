@@ -1,14 +1,5 @@
 # Postify - AI Social Poster Chrome Extension
 
-> **IMPORTANT SECURITY NOTE:**
-> 
-> **Do NOT hardcode your Google OAuth Client ID in `manifest.json` for public repositories.**
-> 
-> - Store your Client ID in a `.env` file (not committed to git) or use the extension's Settings UI.
-> - If you fork or clone this repo, you must create your own Google OAuth credentials and set your own Client ID in `.env` or in the extension settings.
-> - See the setup instructions below for details.
-
----
 
 Transform your Gmail certificates into engaging social media posts with AI. Automatically scan Gmail for certificates and generate professional posts for LinkedIn and Twitter.
 
